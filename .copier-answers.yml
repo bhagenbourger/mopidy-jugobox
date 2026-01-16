@@ -1,0 +1,8 @@
+_commit: v2.2.0
+_src_path: gh:mopidy/cookiecutter-mopidy-ext
+author_email: benoit@hagenbourger.fr
+author_full_name: Benoît Hagenbourger
+dist_name: mopidy-jugobox
+ext_name: jugobox
+github_username: bhagenbourger
+short_description: Mopidy extension for Juke Lego Box
