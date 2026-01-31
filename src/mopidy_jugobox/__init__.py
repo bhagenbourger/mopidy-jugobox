@@ -1,47 +1,38 @@
-import logging
 import pathlib
 from importlib.metadata import version
+from typing import Any, cast, override
 
 from mopidy import config, ext
 
-__version__ = version("mopidy-jugobox")
+from .api import factory
+from .backend import JugoboxSpotifyBackend
+from .frontend import JugoboxFrontend
 
-# TODO: If you need to log, use loggers named after the current Python module
-logger = logging.getLogger(__name__)
+__version__ = version("mopidy-jugobox")
 
 
 class Extension(ext.Extension):
-    dist_name = "mopidy-jugobox"
-    ext_name = "jugobox"
+    dist_name: str = "mopidy-jugobox"
+    ext_name: str = "jugobox"
     version = __version__
 
-    def get_default_config(self):
+    @override
+    def get_default_config(self) -> str:
         return config.read(pathlib.Path(__file__).parent / "ext.conf")
 
-    def get_config_schema(self):
+    @override
+    def get_config_schema(self) -> config.ConfigSchema:
         schema = super().get_config_schema()
-        # TODO: Comment in and edit, or remove entirely
-        #schema["username"] = config.String()
-        #schema["password"] = config.Secret()
+        schema["nfc_enabled"] = config.Boolean()
+        schema["config_path"] = config.String()
         return schema
 
-    def setup(self, registry):
-        # You will typically only implement one of the following things
-        # in a single extension.
-
-        # TODO: Edit or remove entirely
-        from .frontend import FoobarFrontend
-        registry.add("frontend", FoobarFrontend)
-
-        # TODO: Edit or remove entirely
-        from .backend import FoobarBackend
-        registry.add("backend", FoobarBackend)
-
-        # TODO: Edit or remove entirely
-        registry.add(
-            "http:static",
-            {
-                "name": self.ext_name,
-                "path": str(pathlib.Path(__file__).parent / "static"),
-            },
-        )
+    @override
+    def setup(self, registry: ext.Registry) -> None:
+        http_app_config: dict[str, Any] = {
+            "name": self.ext_name,
+            "factory": factory,
+        }
+        registry.add("frontend", JugoboxFrontend)
+        registry.add("http:app", cast("Any", http_app_config))
+        registry.add("backend", JugoboxSpotifyBackend)

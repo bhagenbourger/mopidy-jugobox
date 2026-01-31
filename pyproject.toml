@@ -14,8 +14,10 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "mopidy >= 3.4.1",
+    "mopidy  >= 4.0.0a15",
     "pykka >= 4.1",
+    "adafruit-circuitpython-pn532",
+    # "RPi.GPIO",
 ]
 
 [project.urls]
@@ -38,7 +40,7 @@ dev = [
     { include-group = "typing" },
 ]
 ruff = ["ruff"]
-tests = ["pytest", "pytest-cov"]
+tests = ["pytest", "pytest-cov", "pytest-tornado>=0.8.1", "pygobject"]
 typing = ["pyright"]
 
 
@@ -106,6 +108,7 @@ ignore = [
 
 
 [tool.tox]
+requires = ["tox-uv>=1.16.0"]
 env_list = [
     "3.13",
     "3.14",
@@ -118,6 +121,7 @@ env_list = [
 package = "wheel"
 wheel_build_env = ".pkg"
 dependency_groups = ["tests"]
+system_site_packages = true
 commands = [
     [
         "pytest",

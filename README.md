@@ -6,6 +6,10 @@
 
 Mopidy extension for Juke Lego Box
 
+<div style="text-align:center">
+  <img src="images/jugobox_logo.png" alt="Logo">
+</div>
+
 
 ## Installation
 
