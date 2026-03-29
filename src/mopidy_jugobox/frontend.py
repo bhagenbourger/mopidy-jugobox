@@ -17,7 +17,7 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
         self.core = core
         self.config = config
         self.nfc: NFC | None = None
-        self.music: Music = Music(logger, config["jugobox"]["config_path"])
+        self.music: Music = Music(core, logger, config["jugobox"]["config_path"])
 
     @override
     def on_start(self) -> None:
@@ -40,14 +40,14 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                     self.play_music(uid)
             else:
                 logger.info("No card detected.")
-                self.music.pause(self.core)
+                self.music.pause()
                 current_uid = None
             time.sleep(1)
 
     def play_music(self, uid: str) -> None:
-        self.music.play(self.core, uid)
+        self.music.play(uid)
 
     @override
     def on_stop(self) -> None:
         logger.info("Jugobox frontend stopped.")
-        self.music.pause(self.core)
+        self.music.pause()

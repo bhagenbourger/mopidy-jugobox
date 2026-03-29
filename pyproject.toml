@@ -17,7 +17,6 @@ dependencies = [
     "mopidy  >= 4.0.0a15",
     "pykka >= 4.1",
     "adafruit-circuitpython-pn532",
-    # "RPi.GPIO",
 ]
 
 [project.urls]
@@ -40,7 +39,7 @@ dev = [
     { include-group = "typing" },
 ]
 ruff = ["ruff"]
-tests = ["pytest", "pytest-cov", "pytest-tornado>=0.8.1", "pygobject"]
+tests = ["pytest", "pytest-cov", "pygobject"]
 typing = ["pyright"]
 
 
@@ -121,7 +120,7 @@ env_list = [
 package = "wheel"
 wheel_build_env = ".pkg"
 dependency_groups = ["tests"]
-system_site_packages = true
+system_site_packages = false
 commands = [
     [
         "pytest",

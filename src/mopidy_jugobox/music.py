@@ -1,9 +1,14 @@
 import json
 from logging import Logger
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from mopidy.core import Core
+from mopidy.types import Uri
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class MusicConfigError(Exception):
@@ -11,7 +16,8 @@ class MusicConfigError(Exception):
 
 
 class Music:
-    def __init__(self, logger: Logger, config_path: str) -> None:
+    def __init__(self, core: Core, logger: Logger, config_path: str) -> None:
+        self._core = core
         self._logger = logger
         self.config_path = config_path
 
@@ -20,7 +26,7 @@ class Music:
 
         Returns:
             dict: The content of the config file.
-            None: If the file is not found.
+            None: If the file is not found or is a directory.
             {}: If the file is corrupted (JSONDecodeError).
         """
         try:
@@ -28,10 +34,12 @@ class Music:
                 return json.load(f)
         except FileNotFoundError:
             return None
+        except IsADirectoryError:
+            return None
         except json.JSONDecodeError:
             return {}
 
-    def play(self, core: Core, music_id: str) -> None:
+    def play(self, music_id: str) -> None:
         data = self._read_config()
         if data is None:
             error = f"Config file not found at '{self.config_path}'"
@@ -43,23 +51,23 @@ class Music:
             raise MusicConfigError(error)
 
         uid: str = str(music_id)
-        uris = data.get(uid)
-        if not uris:
+        raw_uris = data.get(uid)
+        if not raw_uris:
             error = f"ID '{uid}' not found in '{self.config_path}'"
             self._logger.error(error)
             raise MusicConfigError(error)
 
-        self._logger.info(f"Playing URIs for id '{uid}': {uris}")
-        uris = [quote(uri, safe=":/") for uri in uris]
-        if core.tracklist is not None:
-            core.tracklist.clear()
-            core.tracklist.add(uris=uris)
-        if core.playback is not None:
-            core.playback.play()
+        self._logger.info(f"Playing URIs for id '{uid}': {raw_uris}")
+        uris: Iterable[Uri] = [Uri(quote(uri, safe=":/")) for uri in raw_uris]
+        if self._core.tracklist is not None:
+            self._core.tracklist.clear()
+            self._core.tracklist.add(uris=uris)
+        if self._core.playback is not None:
+            self._core.playback.play()
 
-    def pause(self, core: Core) -> None:
-        if core.playback is not None:
-            core.playback.pause()
+    def pause(self) -> None:
+        if self._core.playback is not None:
+            self._core.playback.pause()
 
     def save(self, music_id: str, uris: list) -> None:
         data = self._read_config()

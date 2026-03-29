@@ -72,4 +72,4 @@ def test_play_music(
         frontend.logger = logger_mock
         uid = "test_uid"
         frontend.play_music(uid)
-        music_mock.play.assert_called_once_with(core_mock, uid)
+        music_mock.play.assert_called_once_with(uid)

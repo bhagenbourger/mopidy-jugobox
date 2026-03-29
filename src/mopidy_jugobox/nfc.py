@@ -34,10 +34,44 @@ class NFC:
         """Read the content of an NFC tag.
 
         Returns:
-            dict: Contains 'uid' and 'data' keys, or None if no tag found
+            The content of the NFC tag, or None if no tag found.
         """
         try:
             return self.pn532.ntag2xx_read_block(4) if self.pn532 else None
         except Exception:
             self.logger.exception("Error reading tag content")
             return None
+
+    def write_ntag215_content(self, data: bytes | bytearray) -> bool:
+        """Write the content to an NTAG215 tag.
+
+        Args:
+            data: Up to 504 bytes of data to write.
+
+        Returns:
+            True if write was successful, False otherwise.
+        """
+        max_data_length = 504
+        if len(data) > max_data_length:
+            self.logger.error("Data length exceeds 504 bytes")
+            return False
+
+        if not self.pn532:
+            return False
+
+        try:
+            # Pad data with \x00 to a multiple of 4
+            padding_needed = (4 - (len(data) % 4)) % 4
+            padded_data = data + b"\x00" * padding_needed
+
+            for i in range(0, len(padded_data), 4):
+                block_number = 4 + (i // 4)
+                block_data = padded_data[i : i + 4]
+                if not self.pn532.ntag2xx_write_block(block_number, block_data):
+                    self.logger.error(f"Failed to write block {block_number}")
+                    return False
+        except Exception:
+            self.logger.exception("Error writing tag content")
+            return False
+
+        return True
