@@ -5,7 +5,6 @@ from typing import Any, cast, override
 from mopidy import config, ext
 
 from .api import factory
-from .backend import JugoboxSpotifyBackend
 from .frontend import JugoboxFrontend
 
 __version__ = version("mopidy-jugobox")
@@ -35,4 +34,3 @@ class Extension(ext.Extension):
         }
         registry.add("frontend", JugoboxFrontend)
         registry.add("http:app", cast("Any", http_app_config))
-        registry.add("backend", JugoboxSpotifyBackend)

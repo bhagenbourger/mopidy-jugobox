@@ -1,3 +1,4 @@
+import json
 import logging
 
 import tornado.web
@@ -10,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class JugoboxPlayHandler(tornado.web.RequestHandler):
-    def initialize(self, core: Core, music: Music, logger: logging.Logger) -> None:
-        self.core: Core = core
+    def initialize(self, music: Music, logger: logging.Logger) -> None:
         self.music: Music = music
         self.logger = logger
 
@@ -22,7 +22,7 @@ class JugoboxPlayHandler(tornado.web.RequestHandler):
             self.logger.info(f"Received id via HTTP: {music_id}")
 
             if music_id:
-                self.music.play(self.core, music_id)
+                self.music.play(music_id)
                 msg = f"Playing {music_id}"
                 self.write({"status": "ok", "message": msg})
             else:
@@ -43,15 +43,17 @@ class JugoboxPlayHandler(tornado.web.RequestHandler):
             self.write({"error": str(e)})
 
 
-class JugoboxSaveHandler(tornado.web.RequestHandler):
+class JugoboxSaveInConfigHandler(tornado.web.RequestHandler):
+    """
+    This endpoint saves music to play by the Jugo into the local configuration file.
+    """
+
     def initialize(
         self,
-        core: Core,
         music: Music,
         config: dict,
         logger: logging.Logger,
     ) -> None:
-        self.core = core
         self.music = music
         self.config = config
         self.logger = logger
@@ -107,17 +109,76 @@ class JugoboxSaveHandler(tornado.web.RequestHandler):
             self.write({"error": str(e)})
 
 
-def factory(config: dict, core: object) -> list[tuple[str, type, dict[str, object]]]:
-    music = Music(logger, config["jugobox"]["config_path"])
+class JugoboxSaveOnJugoHandler(tornado.web.RequestHandler):
+    """This endpoint saves music to play by the Jugo directly into the NFC tag."""
+
+    def initialize(
+        self,
+        music: Music,
+        config: dict,
+        logger: logging.Logger,
+    ) -> None:
+        self.music = music
+        self.config = config
+        self.logger = logger
+
+    async def post(self) -> None:
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            uris = data.get("uris")
+            if not uris:
+                self.set_status(400)
+                msg = "Missing 'uris' in request body"
+                self.write({"status": "error", "message": msg})
+                return
+
+            nfc = NFC(self.logger)
+            if not nfc.setup():
+                self.set_status(500)
+                msg = "Failed to initialize NFC reader"
+                self.write({"status": "error", "message": msg})
+                return
+
+            # Convert uris to bytes
+            # We use JSON to store the list of URIs
+            uris_bytes = json.dumps(uris).encode("utf-8")
+
+            if nfc.write_ntag215_content(uris_bytes):
+                msg = "Saved URIs to NFC tag"
+                self.write({"status": "ok", "message": msg})
+            else:
+                self.set_status(500)
+                msg = (
+                    "Failed to write to NFC tag. "
+                    "Data might be too large (max 504 bytes)."
+                )
+                self.write({"status": "error", "message": msg})
+
+        except ValueError:
+            self.set_status(400)
+            self.write({"error": "Invalid JSON format"})
+        except Exception as e:
+            self.logger.exception("Failed to save playlist to NFC")
+            self.set_status(500)
+            self.write({"error": str(e)})
+
+
+def factory(config: dict, core: Core) -> list[tuple[str, type, dict[str, object]]]:
+    music = Music(core, logger, config["jugobox"]["config_path"])
     return [
         (
             r"/play",
             JugoboxPlayHandler,
-            {"core": core, "music": music, "logger": logger},
+            {"music": music, "logger": logger},
         ),
         (
-            r"/save",
-            JugoboxSaveHandler,
-            {"core": core, "music": music, "config": config, "logger": logger},
+            r"/save-in-config",
+            JugoboxSaveInConfigHandler,
+            {"music": music, "config": config, "logger": logger},
+        ),
+        (
+            r"/save-on-jugo",
+            JugoboxSaveOnJugoHandler,
+            {"music": music, "config": config, "logger": logger},
         ),
     ]
