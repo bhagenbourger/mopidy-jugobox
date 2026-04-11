@@ -65,12 +65,86 @@ class TestJugoboxApi(AsyncHTTPTestCase):
     @gen_test
     async def test_play_endpoint(self) -> None:
         body = {"id": "test_id"}
-        response = await self.http_client.fetch(
-            self.get_url("/play"),
-            method="POST",
-            body=json.dumps(body),
-            headers={"Content-Type": "application/json"},
-        )
+        # Mock NFC to return no tag so it proceeds to play
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = None
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/play"),
+                method="POST",
+                body=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ok",
+            "message": "Playing test_id",
+        }
+        self.music_mock_http.play.assert_called_once_with("test_id")
+
+    @gen_test
+    async def test_play_endpoint_nfc_detected(self) -> None:
+        self.test_config["jugobox"]["nfc_enabled"] = True
+        body = {"id": "test_id"}
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = "test_uid"
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/play"),
+                method="POST",
+                body=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ignored",
+            "message": "Jugo detected on the box",
+        }
+        self.music_mock_http.play.assert_not_called()
+
+    @gen_test
+    async def test_play_endpoint_nfc_enabled_but_not_detected(self) -> None:
+        self.test_config["jugobox"]["nfc_enabled"] = True
+        body = {"id": "test_id"}
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = None
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/play"),
+                method="POST",
+                body=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ok",
+            "message": "Playing test_id",
+        }
+        self.music_mock_http.play.assert_called_once_with("test_id")
+
+    @gen_test
+    async def test_play_endpoint_nfc_disabled(self) -> None:
+        self.test_config["jugobox"]["nfc_enabled"] = False
+        body = {"id": "test_id"}
+
+        # Even if a tag is present, it should be ignored because NFC is disabled
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = "test_uid"
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/play"),
+                method="POST",
+                body=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+            )
         assert response.code == http.HTTPStatus.OK
         assert json.loads(response.body) == {
             "status": "ok",

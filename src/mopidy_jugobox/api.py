@@ -11,8 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 class JugoboxPlayHandler(tornado.web.RequestHandler):
-    def initialize(self, music: Music, logger: logging.Logger) -> None:
+    def initialize(
+        self,
+        music: Music,
+        config: dict,
+        logger: logging.Logger,
+    ) -> None:
         self.music: Music = music
+        self.config = config
         self.logger = logger
 
     async def post(self) -> None:
@@ -21,11 +27,7 @@ class JugoboxPlayHandler(tornado.web.RequestHandler):
             music_id = data.get("id")
             self.logger.info(f"Received id via HTTP: {music_id}")
 
-            if music_id:
-                self.music.play(music_id)
-                msg = f"Playing {music_id}"
-                self.write({"status": "ok", "message": msg})
-            else:
+            if not music_id:
                 self.set_status(400)
                 self.write(
                     {
@@ -33,6 +35,26 @@ class JugoboxPlayHandler(tornado.web.RequestHandler):
                         "message": "Missing 'id' in request body",
                     }
                 )
+                return
+
+            if self.config["jugobox"]["nfc_enabled"]:
+                nfc = NFC(self.logger)
+                if nfc.setup() and nfc.read_uid():
+                    self.logger.info(
+                        f"Jugo detected on the box. "
+                        f"Ignoring HTTP play request for {music_id}."
+                    )
+                    self.write(
+                        {
+                            "status": "ignored",
+                            "message": "Jugo detected on the box",
+                        }
+                    )
+                    return
+
+            self.music.play(music_id)
+            msg = f"Playing {music_id}"
+            self.write({"status": "ok", "message": msg})
 
         except ValueError:
             self.set_status(400)
@@ -169,7 +191,7 @@ def factory(config: dict, core: Core) -> list[tuple[str, type, dict[str, object]
         (
             r"/play",
             JugoboxPlayHandler,
-            {"music": music, "logger": logger},
+            {"music": music, "config": config, "logger": logger},
         ),
         (
             r"/save-in-config",
