@@ -52,7 +52,7 @@ class JugoboxPlayHandler(tornado.web.RequestHandler):
                     )
                     return
 
-            self.music.play(music_id)
+            self.music.play_music_id(music_id)
             msg = f"Playing {music_id}"
             self.write({"status": "ok", "message": msg})
 
@@ -76,7 +76,7 @@ class JugoboxSaveInConfigHandler(tornado.web.RequestHandler):
         config: dict,
         logger: logging.Logger,
     ) -> None:
-        self.music = music
+        self.music: Music = music
         self.config = config
         self.logger = logger
 
@@ -140,7 +140,7 @@ class JugoboxSaveOnJugoHandler(tornado.web.RequestHandler):
         config: dict,
         logger: logging.Logger,
     ) -> None:
-        self.music = music
+        self.music: Music = music
         self.config = config
         self.logger = logger
 

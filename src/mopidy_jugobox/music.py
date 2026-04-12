@@ -39,7 +39,7 @@ class Music:
         except json.JSONDecodeError:
             return {}
 
-    def play(self, music_id: str) -> None:
+    def play_music_id(self, music_id: str) -> None:
         data = self._read_config()
         if data is None:
             error = f"Config file not found at '{self.config_path}'"
@@ -58,10 +58,18 @@ class Music:
             raise MusicConfigError(error)
 
         self._logger.info(f"Playing URIs for id '{uid}': {raw_uris}")
-        uris: Iterable[Uri] = [Uri(quote(uri, safe=":/")) for uri in raw_uris]
+        self.play_uris(raw_uris)
+
+    def play_uris(self, uris: "Iterable[str]") -> None:
+        """Plays a list of URIs directly.
+
+        Args:
+            uris: An iterable of URI strings to play.
+        """
+        mopidy_uris: Iterable[Uri] = [Uri(quote(uri, safe=":/")) for uri in uris]
         if self._core.tracklist is not None:
             self._core.tracklist.clear()
-            self._core.tracklist.add(uris=uris)
+            self._core.tracklist.add(uris=mopidy_uris)
         if self._core.playback is not None:
             self._core.playback.play()
 

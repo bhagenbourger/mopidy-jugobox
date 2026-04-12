@@ -76,23 +76,27 @@ def test_read_uid_none(nfc: NFC) -> None:
     assert nfc.read_uid() is None
 
 
-def test_read_tag_content_no_pn532(nfc: NFC) -> None:
-    assert nfc.read_tag_content() is None
+def test_read_ntag215_content_no_pn532(nfc: NFC) -> None:
+    assert nfc.read_ntag215_content() is None
 
 
-def test_read_tag_content_success(nfc: NFC) -> None:
+def test_read_ntag215_content_success(nfc: NFC) -> None:
+    number_of_expected_call = 2
     nfc.pn532 = mock.Mock()
-    nfc.pn532.ntag2xx_read_block.return_value = b"test"
+    # Mocking multiple blocks, second one has null terminator
+    nfc.pn532.ntag2xx_read_block.side_effect = [b"test", b"more\x00"]
 
-    assert nfc.read_tag_content() == b"test"
-    nfc.pn532.ntag2xx_read_block.assert_called_once_with(4)
+    assert nfc.read_ntag215_content() == b"testmore"
+    assert nfc.pn532.ntag2xx_read_block.call_count == number_of_expected_call
+    nfc.pn532.ntag2xx_read_block.assert_any_call(4)
+    nfc.pn532.ntag2xx_read_block.assert_any_call(5)
 
 
-def test_read_tag_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
+def test_read_ntag215_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
     nfc.pn532 = mock.Mock()
     nfc.pn532.ntag2xx_read_block.side_effect = Exception("Read failed")
 
-    assert nfc.read_tag_content() is None
+    assert nfc.read_ntag215_content() is None
     logger_mock.exception.assert_called_once_with("Error reading tag content")
 
 

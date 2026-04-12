@@ -38,38 +38,42 @@ def test_music_init(core_mock: mock.Mock, logger_mock: mock.Mock) -> None:
     assert music.config_path == "dummy_path"
 
 
-def test_play_config_not_found(core_mock: mock.Mock, logger_mock: mock.Mock) -> None:
+def test_play_music_id_config_not_found(
+    core_mock: mock.Mock, logger_mock: mock.Mock
+) -> None:
     music = Music(core_mock, logger_mock, "non_existent.json")
     with pytest.raises(MusicConfigError, match="Config file not found"):
-        music.play("test_id")
+        music.play_music_id("test_id")
     logger_mock.error.assert_called()
 
 
-def test_play_config_empty(core_mock: mock.Mock, logger_mock: mock.Mock) -> None:
+def test_play_music_id_config_empty(
+    core_mock: mock.Mock, logger_mock: mock.Mock
+) -> None:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         f.write("{}")
         temp_path = Path(f.name)
     try:
         music = Music(core_mock, logger_mock, str(temp_path))
         with pytest.raises(MusicConfigError, match="corrupted or empty"):
-            music.play("test_id")
+            music.play_music_id("test_id")
     finally:
         temp_path.unlink()
 
 
-def test_play_id_not_found(
+def test_play_music_id_id_not_found(
     core_mock: mock.Mock, logger_mock: mock.Mock, temp_config_file: Path
 ) -> None:
     music = Music(core_mock, logger_mock, str(temp_config_file))
     with pytest.raises(MusicConfigError, match="not found in"):
-        music.play("unknown_id")
+        music.play_music_id("unknown_id")
 
 
-def test_play_success(
+def test_play_music_id_success(
     core_mock: mock.Mock, logger_mock: mock.Mock, temp_config_file: Path
 ) -> None:
     music = Music(core_mock, logger_mock, str(temp_config_file))
-    music.play("test_id")
+    music.play_music_id("test_id")
 
     core_mock.tracklist.clear.assert_called_once()
     core_mock.tracklist.add.assert_called_once()
@@ -80,6 +84,21 @@ def test_play_success(
     assert isinstance(called_uris[0], str)
     assert called_uris[0] == "local:track:1.mp3"
 
+    core_mock.playback.play.assert_called_once()
+
+
+def test_play_uris(core_mock: mock.Mock, logger_mock: mock.Mock) -> None:
+    number_of_uris_expected = 2
+    music = Music(core_mock, logger_mock, "dummy_path")
+    uris = ["local:track:1.mp3", "local:track:2.mp3"]
+    music.play_uris(uris)
+
+    core_mock.tracklist.clear.assert_called_once()
+    core_mock.tracklist.add.assert_called_once()
+    called_uris = core_mock.tracklist.add.call_args.kwargs["uris"]
+    assert len(called_uris) == number_of_uris_expected
+    assert called_uris[0] == "local:track:1.mp3"
+    assert called_uris[1] == "local:track:2.mp3"
     core_mock.playback.play.assert_called_once()
 
 

@@ -30,14 +30,28 @@ class NFC:
 
         return "".join([hex(i) for i in uid]) if uid else None
 
-    def read_tag_content(self) -> bytes | bytearray | None:
-        """Read the content of an NFC tag.
+    def read_ntag215_content(self) -> bytearray | None:
+        """Read the content of an NTAG215 tag.
 
         Returns:
             The content of the NFC tag, or None if no tag found.
         """
+        if not self.pn532:
+            return None
+
         try:
-            return self.pn532.ntag2xx_read_block(4) if self.pn532 else None
+            full_content = bytearray()
+            # NTAG215 has 135 blocks total,
+            # user data starts at block 4 and goes up to 129
+            # (126 blocks * 4 bytes = 504 bytes)
+            for block_num in range(4, 130):
+                block = self.pn532.ntag2xx_read_block(block_num)
+                if not block:
+                    break
+                full_content.extend(block)
+                if b"\x00" in block:
+                    break
+            return full_content.rstrip(b"\x00")
         except Exception:
             self.logger.exception("Error reading tag content")
             return None

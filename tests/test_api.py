@@ -82,7 +82,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
             "status": "ok",
             "message": "Playing test_id",
         }
-        self.music_mock_http.play.assert_called_once_with("test_id")
+        self.music_mock_http.play_music_id.assert_called_once_with("test_id")
 
     @gen_test
     async def test_play_endpoint_nfc_detected(self) -> None:
@@ -104,7 +104,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
             "status": "ignored",
             "message": "Jugo detected on the box",
         }
-        self.music_mock_http.play.assert_not_called()
+        self.music_mock_http.play_music_id.assert_not_called()
 
     @gen_test
     async def test_play_endpoint_nfc_enabled_but_not_detected(self) -> None:
@@ -126,7 +126,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
             "status": "ok",
             "message": "Playing test_id",
         }
-        self.music_mock_http.play.assert_called_once_with("test_id")
+        self.music_mock_http.play_music_id.assert_called_once_with("test_id")
 
     @gen_test
     async def test_play_endpoint_nfc_disabled(self) -> None:
@@ -150,7 +150,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
             "status": "ok",
             "message": "Playing test_id",
         }
-        self.music_mock_http.play.assert_called_once_with("test_id")
+        self.music_mock_http.play_music_id.assert_called_once_with("test_id")
 
     @gen_test
     async def test_play_handler_post_missing_id(self) -> None:
@@ -163,6 +163,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "Missing 'id' in request body",
@@ -179,6 +180,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {"error": "Invalid JSON format"}
 
     @gen_test
@@ -224,6 +226,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "No NFC tag detected",
@@ -249,6 +252,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.INTERNAL_SERVER_ERROR
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "Failed to initialize NFC reader",
@@ -309,6 +313,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "NFC is disabled, 'id' parameter is required",
@@ -326,6 +331,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "Missing 'uris' in request body",
@@ -342,6 +348,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {"error": "Invalid JSON format"}
 
     @gen_test
@@ -384,6 +391,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.INTERNAL_SERVER_ERROR
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "Failed to initialize NFC reader",
@@ -407,6 +415,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.INTERNAL_SERVER_ERROR
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": (
@@ -425,6 +434,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
                 headers={"Content-Type": "application/json"},
             )
         assert e.value.code == http.HTTPStatus.BAD_REQUEST
+        assert e.value.response is not None
         assert json.loads(e.value.response.body) == {
             "status": "error",
             "message": "Missing 'uris' in request body",
