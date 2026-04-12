@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from typing import override
@@ -37,15 +38,41 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                 if uid != current_uid:
                     current_uid = uid
                     logger.info(f"Card scanned with UID: {uid}")
-                    self.play_music(uid)
+                    content = (
+                        self.nfc.read_ntag215_content()
+                        if self.nfc is not None
+                        else None
+                    )
+                    if content and any(b != 0 for b in content):
+                        self.play_music(uid, content)
+                    else:
+                        self.play_music(uid)
             else:
                 logger.info("No card detected.")
                 self.music.pause()
                 current_uid = None
             time.sleep(1)
 
-    def play_music(self, uid: str) -> None:
-        self.music.play(uid)
+    def play_music(self, uid: str, content: bytes | bytearray | None = None) -> None:
+        if content:
+            try:
+                # Strip nulls and decode
+                content_str = content.decode("utf-8").strip("\x00")
+                if content_str:
+                    try:
+                        data = json.loads(content_str)
+                        if isinstance(data, list):
+                            self.music.play_uris(data)
+                        else:
+                            self.music.play_uris([str(data)])
+                    except json.JSONDecodeError:
+                        # Not JSON, maybe it's just a single URI string
+                        self.music.play_uris([content_str])
+                    return
+            except UnicodeDecodeError:
+                logger.warning("Failed to decode tag content as UTF-8")
+
+        self.music.play_music_id(uid)
 
     @override
     def on_stop(self) -> None:

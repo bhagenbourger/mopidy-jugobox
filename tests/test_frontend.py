@@ -1,4 +1,4 @@
-import logging
+import json
 from unittest import mock
 
 import pytest
@@ -35,41 +35,69 @@ def nfc_mock() -> mock.Mock:
     return mock.Mock(spec=NFC)
 
 
-@pytest.fixture
-def logger_mock() -> mock.Mock:
-    return mock.Mock(spec=logging.Logger)
-
-
 def test_on_start_nfc_enabled(
-    config: dict, core_mock: mock.Mock, nfc_mock: mock.Mock, logger_mock: mock.Mock
+    config: dict, core_mock: mock.Mock, nfc_mock: mock.Mock
 ) -> None:
     with mock.patch("mopidy_jugobox.frontend.NFC", return_value=nfc_mock):
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
-        frontend.logger = logger_mock  # Manually set logger for testing
         nfc_mock.setup.return_value = True
         frontend.on_start()
         nfc_mock.setup.assert_called_once()
         assert frontend.nfc is nfc_mock
 
 
-def test_on_start_nfc_disabled(
-    config: dict, core_mock: mock.Mock, logger_mock: mock.Mock
-) -> None:
+def test_on_start_nfc_disabled(config: dict, core_mock: mock.Mock) -> None:
     config["jugobox"]["nfc_enabled"] = False
     with mock.patch("mopidy_jugobox.frontend.NFC") as mock_nfc:
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
-        frontend.logger = logger_mock
         frontend.on_start()
         mock_nfc.assert_not_called()
         assert frontend.nfc is None
 
 
-def test_play_music(
-    config: dict, core_mock: mock.Mock, music_mock: mock.Mock, logger_mock: mock.Mock
+def test_play_music_from_uid(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock
 ) -> None:
     with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
-        frontend.logger = logger_mock
         uid = "test_uid"
         frontend.play_music(uid)
-        music_mock.play.assert_called_once_with(uid)
+        music_mock.play_music_id.assert_called_once_with(uid)
+
+
+def test_play_music_from_content_list(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock
+) -> None:
+    with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
+        frontend = frontend_lib.JugoboxFrontend(config, core_mock)
+        uid = "test_uid"
+        content = json.dumps(["local:track:1.mp3", "local:track:2.mp3"]).encode("utf-8")
+        frontend.play_music(uid, content)
+        music_mock.play_uris.assert_called_once_with(
+            ["local:track:1.mp3", "local:track:2.mp3"]
+        )
+        music_mock.play_music_id.assert_not_called()
+
+
+def test_play_music_from_content_single_uri(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock
+) -> None:
+    with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
+        frontend = frontend_lib.JugoboxFrontend(config, core_mock)
+        uid = "test_uid"
+        content = b"local:track:1.mp3"
+        frontend.play_music(uid, content)
+        music_mock.play_uris.assert_called_once_with(["local:track:1.mp3"])
+        music_mock.play_music_id.assert_not_called()
+
+
+def test_play_music_from_content_invalid_json_falls_back(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock
+) -> None:
+    with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
+        frontend = frontend_lib.JugoboxFrontend(config, core_mock)
+        uid = "test_uid"
+        content = b"\x00\x00\x00\x00"
+        frontend.play_music(uid, content)
+        music_mock.play_music_id.assert_called_once_with(uid)
+        music_mock.play_uris.assert_not_called()
