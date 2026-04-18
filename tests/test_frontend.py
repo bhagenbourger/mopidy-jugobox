@@ -16,6 +16,7 @@ def config() -> dict:
             "enabled": True,
             "nfc_enabled": True,
             "config_path": "test_jugobox.json",
+            "state_path": "test_state.json",
         }
     }
 
@@ -74,7 +75,7 @@ def test_play_music_from_content_list(
         content = json.dumps(["local:track:1.mp3", "local:track:2.mp3"]).encode("utf-8")
         frontend.play_music(uid, content)
         music_mock.play_uris.assert_called_once_with(
-            ["local:track:1.mp3", "local:track:2.mp3"]
+            ["local:track:1.mp3", "local:track:2.mp3"], music_id=uid
         )
         music_mock.play_music_id.assert_not_called()
 
@@ -87,7 +88,9 @@ def test_play_music_from_content_single_uri(
         uid = "test_uid"
         content = b"local:track:1.mp3"
         frontend.play_music(uid, content)
-        music_mock.play_uris.assert_called_once_with(["local:track:1.mp3"])
+        music_mock.play_uris.assert_called_once_with(
+            ["local:track:1.mp3"], music_id=uid
+        )
         music_mock.play_music_id.assert_not_called()
 
 

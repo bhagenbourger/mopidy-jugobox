@@ -8,8 +8,9 @@ from mopidy import core
 
 from .music import Music
 from .nfc import NFC
+from .state import get_state
 
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 
 class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
@@ -18,15 +19,20 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
         self.core = core
         self.config = config
         self.nfc: NFC | None = None
-        self.music: Music = Music(core, logger, config["jugobox"]["config_path"])
+        self.state = get_state(config["jugobox"]["state_path"])
+        self.music: Music = Music(
+            core,
+            config["jugobox"]["config_path"],
+            self.state,
+        )
 
     @override
     def on_start(self) -> None:
         if not self.config["jugobox"]["nfc_enabled"]:
-            logger.info("NFC is disabled.")
+            LOGGER.info("NFC is disabled.")
             return
 
-        self.nfc = NFC(logger)
+        self.nfc = NFC()
         if self.nfc.setup():
             self.actor_ref.proxy().start_scanning()
 
@@ -37,7 +43,7 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
             if uid:
                 if uid != current_uid:
                     current_uid = uid
-                    logger.info(f"Card scanned with UID: {uid}")
+                    LOGGER.info(f"Card scanned with UID: {uid}")
                     content = (
                         self.nfc.read_ntag215_content()
                         if self.nfc is not None
@@ -48,8 +54,11 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                     else:
                         self.play_music(uid)
             else:
-                logger.info("No card detected.")
-                self.music.pause()
+                if current_uid is not None:
+                    LOGGER.info(f"Card removed. UID: {current_uid}")
+                else:
+                    LOGGER.info("No card detected.")
+                self.music.pause(current_uid)
                 current_uid = None
             time.sleep(1)
 
@@ -62,19 +71,19 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                     try:
                         data = json.loads(content_str)
                         if isinstance(data, list):
-                            self.music.play_uris(data)
+                            self.music.play_uris(data, music_id=uid)
                         else:
-                            self.music.play_uris([str(data)])
+                            self.music.play_uris([str(data)], music_id=uid)
                     except json.JSONDecodeError:
                         # Not JSON, maybe it's just a single URI string
-                        self.music.play_uris([content_str])
+                        self.music.play_uris([content_str], music_id=uid)
                     return
             except UnicodeDecodeError:
-                logger.warning("Failed to decode tag content as UTF-8")
+                LOGGER.warning("Failed to decode tag content as UTF-8")
 
         self.music.play_music_id(uid)
 
     @override
     def on_stop(self) -> None:
-        logger.info("Jugobox frontend stopped.")
+        LOGGER.info("Jugobox frontend stopped.")
         self.music.pause()

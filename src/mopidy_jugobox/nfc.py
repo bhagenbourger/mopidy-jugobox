@@ -4,11 +4,13 @@ import board
 import busio
 from adafruit_pn532.i2c import PN532_I2C
 
+LOGGER = logging.getLogger(__name__)
+
 
 class NFC:
-    def __init__(self, logger: logging.Logger) -> None:
-        self.logger = logger
+    def __init__(self, logger: logging.Logger = LOGGER) -> None:
         self.pn532: PN532_I2C | None = None
+        self._logger = logger
 
     def setup(self) -> bool:
         try:
@@ -16,11 +18,11 @@ class NFC:
             self.pn532 = PN532_I2C(i2c, debug=False)
 
             _, ver, rev, _ = self.pn532.firmware_version
-            self.logger.info(f"Found PN532 with firmware version: {ver}.{rev}")
+            self._logger.info(f"Found PN532 with firmware version: {ver}.{rev}")
 
             self.pn532.SAM_configuration()
         except Exception:
-            self.logger.exception("Failed to initialize PN532")
+            self._logger.exception("Failed to initialize PN532")
             return False
         return True
 
@@ -53,7 +55,7 @@ class NFC:
                     break
             return full_content.rstrip(b"\x00")
         except Exception:
-            self.logger.exception("Error reading tag content")
+            self._logger.exception("Error reading tag content")
             return None
 
     def write_ntag215_content(self, data: bytes | bytearray) -> bool:
@@ -67,7 +69,7 @@ class NFC:
         """
         max_data_length = 504
         if len(data) > max_data_length:
-            self.logger.error("Data length exceeds 504 bytes")
+            self._logger.error("Data length exceeds 504 bytes")
             return False
 
         if not self.pn532:
@@ -82,10 +84,10 @@ class NFC:
                 block_number = 4 + (i // 4)
                 block_data = padded_data[i : i + 4]
                 if not self.pn532.ntag2xx_write_block(block_number, block_data):
-                    self.logger.error(f"Failed to write block {block_number}")
+                    self._logger.error(f"Failed to write block {block_number}")
                     return False
         except Exception:
-            self.logger.exception("Error writing tag content")
+            self._logger.exception("Error writing tag content")
             return False
 
         return True

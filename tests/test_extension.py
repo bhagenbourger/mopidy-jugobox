@@ -7,7 +7,8 @@ def test_get_default_config() -> None:
     assert "[jugobox]" in config
     assert "enabled = true" in config
     assert "nfc_enabled = true" in config
-    assert 'config_path = "/etc/mopidy/jugobox.json"' in config
+    assert 'config_path = "~/.local/share/mopidy/jugobox/config.json"' in config
+    assert 'state_path = "~/.local/share/mopidy/jugobox/state.json"' in config
 
 
 def test_get_config_schema() -> None:
@@ -15,3 +16,4 @@ def test_get_config_schema() -> None:
     schema = ext.get_config_schema()
     assert "nfc_enabled" in schema
     assert "config_path" in schema
+    assert "state_path" in schema
