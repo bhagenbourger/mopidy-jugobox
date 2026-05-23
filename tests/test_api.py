@@ -8,10 +8,12 @@ from unittest import mock
 import pytest
 import tornado.web
 from mopidy import core
+from mopidy.types import DurationMs
 from tornado.testing import AsyncHTTPTestCase, gen_test
 
 from mopidy_jugobox import api as jugobox_api
 from mopidy_jugobox.music import Music
+from mopidy_jugobox.state import PlaybackState
 
 
 @pytest.fixture
@@ -29,6 +31,7 @@ def test_config() -> Iterator[dict]:
                 "enabled": True,
                 "nfc_enabled": True,
                 "config_path": str(config_path),
+                "state_path": str(config_path.with_name("state.json")),
             }
         }
     finally:
@@ -61,6 +64,139 @@ class TestJugoboxApi(AsyncHTTPTestCase):
         with mock.patch("mopidy_jugobox.api.Music", return_value=self.music_mock_http):
             handlers = jugobox_api.factory(self.test_config, self.core_mock_http)
             return tornado.web.Application(handlers)
+
+    @gen_test
+    async def test_clear_state_endpoint(self) -> None:
+        body = {"id": "test_id"}
+        response = await self.http_client.fetch(
+            self.get_url("/clear-state"),
+            method="POST",
+            body=json.dumps(body),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ok",
+            "message": "Cleared state for test_id",
+        }
+        self.music_mock_http.clear_state.assert_called_once_with("test_id")
+
+    @gen_test
+    async def test_clear_full_state_endpoint(self) -> None:
+        response = await self.http_client.fetch(
+            self.get_url("/clear-full-state"),
+            method="POST",
+            body=json.dumps({}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ok",
+            "message": "Cleared all playback states",
+        }
+        self.music_mock_http.clear_full_state.assert_called_once()
+
+    @gen_test
+    async def test_get_state_endpoint(self) -> None:
+        state = PlaybackState(index=1, time_position=DurationMs(1000))
+        dummy_state = {"test_id": state}
+        expected_response = {"test_id": {"index": 1, "time_position": 1000}}
+        self.music_mock_http.get_states.return_value = dummy_state
+        response = await self.http_client.fetch(
+            self.get_url("/get-state"),
+            method="GET",
+        )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == expected_response
+        self.music_mock_http.get_states.assert_called_once()
+
+    @gen_test
+    async def test_get_state_endpoint_post(self) -> None:
+        state = PlaybackState(index=1, time_position=DurationMs(1000))
+        dummy_state = {"test_id": state}
+        expected_response = {"test_id": {"index": 1, "time_position": 1000}}
+        self.music_mock_http.get_states.return_value = dummy_state
+        response = await self.http_client.fetch(
+            self.get_url("/get-state"),
+            method="POST",
+            body=json.dumps({}),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == expected_response
+        self.music_mock_http.get_states.assert_called_once()
+
+    @gen_test
+    async def test_clear_state_endpoint_fallback_nfc(self) -> None:
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = "nfc_uid"
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/clear-state"),
+                method="POST",
+                body=json.dumps({}),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.code == http.HTTPStatus.OK
+        assert json.loads(response.body) == {
+            "status": "ok",
+            "message": "Cleared state for nfc_uid",
+        }
+        self.music_mock_http.clear_state.assert_called_once_with("nfc_uid")
+
+    @gen_test
+    async def test_clear_state_endpoint_no_id_no_nfc(self) -> None:
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = None
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/clear-state"),
+                method="POST",
+                body=json.dumps({}),
+                headers={"Content-Type": "application/json"},
+                raise_error=False,
+            )
+        assert response.code == http.HTTPStatus.BAD_REQUEST
+        assert json.loads(response.body) == {
+            "status": "error",
+            "message": "Missing 'id' and no Jugo detected on the box",
+        }
+
+    @gen_test
+    async def test_save_in_config_clears_state_api(self) -> None:
+        self.test_config["jugobox"]["nfc_enabled"] = False
+        body = {"uris": ["uri1"], "id": "test_id"}
+        response = await self.http_client.fetch(
+            self.get_url("/save-in-config"),
+            method="POST",
+            body=json.dumps(body),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.code == http.HTTPStatus.OK
+        self.music_mock_http.save.assert_called_once_with("test_id", ["uri1"])
+        self.music_mock_http.clear_state.assert_called_once_with("test_id")
+
+    @gen_test
+    async def test_save_on_jugo_clears_state_api(self) -> None:
+        body = {"uris": ["uri1"]}
+        mock_nfc_instance = mock.Mock()
+        mock_nfc_instance.setup.return_value = True
+        mock_nfc_instance.read_uid.return_value = "nfc_uid"
+        mock_nfc_instance.write_ntag215_content.return_value = True
+
+        with mock.patch("mopidy_jugobox.api.NFC", return_value=mock_nfc_instance):
+            response = await self.http_client.fetch(
+                self.get_url("/save-on-jugo"),
+                method="POST",
+                body=json.dumps(body),
+                headers={"Content-Type": "application/json"},
+            )
+        assert response.code == http.HTTPStatus.OK
+        self.music_mock_http.clear_state.assert_called_once_with("nfc_uid")
 
     @gen_test
     async def test_play_endpoint(self) -> None:

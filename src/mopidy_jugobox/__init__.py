@@ -23,7 +23,8 @@ class Extension(ext.Extension):
     def get_config_schema(self) -> config.ConfigSchema:
         schema = super().get_config_schema()
         schema["nfc_enabled"] = config.Boolean()
-        schema["config_path"] = config.String()
+        schema["config_path"] = config.Path()
+        schema["state_path"] = config.Path()
         return schema
 
     @override

@@ -16,18 +16,31 @@ def nfc(logger_mock: mock.Mock) -> NFC:
     return NFC(logger_mock)
 
 
-def test_nfc_init(nfc: NFC, logger_mock: mock.Mock) -> None:
-    assert nfc.logger == logger_mock
-    assert nfc.pn532 is None
+@pytest.fixture
+def mock_board(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+    m = mock.Mock()
+    monkeypatch.setattr("mopidy_jugobox.nfc.board", m)
+    return m
 
 
-@mock.patch("mopidy_jugobox.nfc.busio.I2C")
-@mock.patch("mopidy_jugobox.nfc.board")
-@mock.patch("mopidy_jugobox.nfc.PN532_I2C")
+@pytest.fixture
+def mock_busio_i2c(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+    m = mock.Mock()
+    monkeypatch.setattr("mopidy_jugobox.nfc.busio.I2C", m)
+    return m
+
+
+@pytest.fixture
+def mock_pn532_i2c(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
+    m = mock.Mock()
+    monkeypatch.setattr("mopidy_jugobox.nfc.PN532_I2C", m)
+    return m
+
+
 def test_setup_success(
     mock_pn532_i2c: mock.Mock,
     mock_board: mock.Mock,
-    mock_i2c: mock.Mock,
+    mock_busio_i2c: mock.Mock,
     nfc: NFC,
 ) -> None:
     mock_pn532_instance = mock_pn532_i2c.return_value
@@ -35,19 +48,14 @@ def test_setup_success(
 
     assert nfc.setup() is True
 
-    mock_i2c.assert_called_once_with(mock_board.SCL, mock_board.SDA)
-    mock_pn532_i2c.assert_called_once_with(mock_i2c.return_value, debug=False)
+    mock_busio_i2c.assert_called_once_with(mock_board.SCL, mock_board.SDA)
+    mock_pn532_i2c.assert_called_once_with(mock_busio_i2c.return_value, debug=False)
     mock_pn532_instance.SAM_configuration.assert_called_once()
     assert nfc.pn532 == mock_pn532_instance
 
 
-@mock.patch("mopidy_jugobox.nfc.busio.I2C")
-@mock.patch("mopidy_jugobox.nfc.board")
-@mock.patch("mopidy_jugobox.nfc.PN532_I2C")
 def test_setup_failure(
     mock_pn532_i2c: mock.Mock,
-    mock_board: mock.Mock,
-    mock_i2c: mock.Mock,
     nfc: NFC,
     logger_mock: mock.Mock,
 ) -> None:
