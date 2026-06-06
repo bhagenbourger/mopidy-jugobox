@@ -1,4 +1,3 @@
-import json
 from unittest import mock
 
 import pytest
@@ -72,11 +71,9 @@ def test_play_music_from_content_list(
     with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
         uid = "test_uid"
-        content = json.dumps(["local:track:1.mp3", "local:track:2.mp3"]).encode("utf-8")
-        frontend.play_music(uid, content)
-        music_mock.play_uris.assert_called_once_with(
-            ["local:track:1.mp3", "local:track:2.mp3"], music_id=uid
-        )
+        uris = ["local:track:1.mp3", "local:track:2.mp3"]
+        frontend.play_music(uid, uris)
+        music_mock.play_uris.assert_called_once_with(uris, music_id=uid)
         music_mock.play_music_id.assert_not_called()
 
 
@@ -86,21 +83,18 @@ def test_play_music_from_content_single_uri(
     with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
         uid = "test_uid"
-        content = b"local:track:1.mp3"
-        frontend.play_music(uid, content)
-        music_mock.play_uris.assert_called_once_with(
-            ["local:track:1.mp3"], music_id=uid
-        )
+        uris = ["local:track:1.mp3"]
+        frontend.play_music(uid, uris)
+        music_mock.play_uris.assert_called_once_with(uris, music_id=uid)
         music_mock.play_music_id.assert_not_called()
 
 
-def test_play_music_from_content_invalid_json_falls_back(
+def test_play_music_empty_uris(
     config: dict, core_mock: mock.Mock, music_mock: mock.Mock
 ) -> None:
     with mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock):
         frontend = frontend_lib.JugoboxFrontend(config, core_mock)
         uid = "test_uid"
-        content = b"\x00\x00\x00\x00"
-        frontend.play_music(uid, content)
+        frontend.play_music(uid, [])
         music_mock.play_music_id.assert_called_once_with(uid)
         music_mock.play_uris.assert_not_called()

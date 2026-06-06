@@ -1,7 +1,9 @@
+import json
 import logging
 from unittest import mock
 
 import pytest
+from mopidy.types import Uri
 
 from mopidy_jugobox.nfc import NFC
 
@@ -85,71 +87,96 @@ def test_read_uid_none(nfc: NFC) -> None:
 
 
 def test_read_ntag215_content_no_pn532(nfc: NFC) -> None:
-    assert nfc.read_ntag215_content() is None
+    assert nfc.read_ntag215_content() == []
 
 
 def test_read_ntag215_content_success(nfc: NFC) -> None:
-    number_of_expected_call = 2
+    block_size: int = 4
     nfc.pn532 = mock.Mock()
     # Mocking multiple blocks, second one has null terminator
-    nfc.pn532.ntag2xx_read_block.side_effect = [b"test", b"more\x00"]
+    # JSON list of URIs
+    uris = ["local:track:1.mp3", "local:track:2.mp3"]
+    content = json.dumps(uris).encode("utf-8")
+    blocks = [content[i : i + block_size] for i in range(0, len(content), block_size)]
+    if len(blocks[-1]) < block_size:
+        blocks[-1] = blocks[-1].ljust(block_size, b"\x00")
+    else:
+        blocks.append(b"\x00" * block_size)
 
-    assert nfc.read_ntag215_content() == b"testmore"
-    assert nfc.pn532.ntag2xx_read_block.call_count == number_of_expected_call
-    nfc.pn532.ntag2xx_read_block.assert_any_call(4)
-    nfc.pn532.ntag2xx_read_block.assert_any_call(5)
+    nfc.pn532.ntag2xx_read_block.side_effect = blocks
+
+    assert nfc.read_ntag215_content() == [Uri(u) for u in uris]
+    assert nfc.pn532.ntag2xx_read_block.call_count == len(blocks)
+
+
+def test_read_ntag215_content_fallback_single_uri(nfc: NFC) -> None:
+    nfc.pn532 = mock.Mock()
+    nfc.pn532.ntag2xx_read_block.side_effect = [
+        b"loca",
+        b"l:tr",
+        b"ack:",
+        b"1.mp",
+        b"3\x00\x00\x00",
+    ]
+
+    assert nfc.read_ntag215_content() == [Uri("local:track:1.mp3")]
 
 
 def test_read_ntag215_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
     nfc.pn532 = mock.Mock()
     nfc.pn532.ntag2xx_read_block.side_effect = Exception("Read failed")
 
-    assert nfc.read_ntag215_content() is None
+    assert nfc.read_ntag215_content() == []
     logger_mock.exception.assert_called_once_with("Error reading tag content")
 
 
 def test_write_ntag215_content_no_pn532(nfc: NFC) -> None:
-    assert nfc.write_ntag215_content(b"data") is False
+    assert nfc.write_ntag215_content([Uri("local:track:1.mp3")]) is False
 
 
 def test_write_ntag215_content_success(nfc: NFC) -> None:
     nfc.pn532 = mock.Mock()
     nfc.pn532.ntag2xx_write_block.return_value = True
+    uris = [Uri("local:track:1.mp3")]
+    expected_data = json.dumps(uris).encode("utf-8")
+    # Pad to multiple of 4
+    padding_needed = (4 - (len(expected_data) % 4)) % 4
+    expected_data += b"\x00" * padding_needed
+    expected_count = len(expected_data) // 4
 
-    assert nfc.write_ntag215_content(b"data") is True
-    nfc.pn532.ntag2xx_write_block.assert_called_once_with(4, b"data")
+    assert nfc.write_ntag215_content(uris) is True
+    assert nfc.pn532.ntag2xx_write_block.call_count == expected_count
+    for i in range(expected_count):
+        nfc.pn532.ntag2xx_write_block.assert_any_call(
+            4 + i, expected_data[i * 4 : (i + 1) * 4]
+        )
 
 
 def test_write_ntag215_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
     nfc.pn532 = mock.Mock()
     nfc.pn532.ntag2xx_write_block.side_effect = Exception("Write failed")
 
-    assert nfc.write_ntag215_content(b"data") is False
+    assert nfc.write_ntag215_content([Uri("local:track:1.mp3")]) is False
     logger_mock.exception.assert_called_once_with("Error writing tag content")
 
 
 def test_write_ntag215_content_too_long(nfc: NFC, logger_mock: mock.Mock) -> None:
-    data = b"a" * 505
-    assert nfc.write_ntag215_content(data) is False
+    uris = [Uri("local:track:" + "a" * 500)]
+    assert nfc.write_ntag215_content(uris) is False
     logger_mock.error.assert_called_once_with("Data length exceeds 504 bytes")
 
 
-def test_write_ntag215_content_success_long_data(nfc: NFC) -> None:
+def test_write_ntag215_content_with_padding_success(nfc: NFC) -> None:
     nfc.pn532 = mock.Mock()
     nfc.pn532.ntag2xx_write_block.return_value = True
-    data = b"12345678"
-    expected_count = 2
+    data = [Uri("local:track:1.mp3")]
+    expected_count = 6
 
     assert nfc.write_ntag215_content(data) is True
     assert nfc.pn532.ntag2xx_write_block.call_count == expected_count
-    nfc.pn532.ntag2xx_write_block.assert_any_call(4, b"1234")
-    nfc.pn532.ntag2xx_write_block.assert_any_call(5, b"5678")
-
-
-def test_write_ntag215_content_padding(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
-    nfc.pn532.ntag2xx_write_block.return_value = True
-    data = b"123"
-
-    assert nfc.write_ntag215_content(data) is True
-    nfc.pn532.ntag2xx_write_block.assert_called_once_with(4, b"123\x00")
+    nfc.pn532.ntag2xx_write_block.assert_any_call(4, b'["lo')
+    nfc.pn532.ntag2xx_write_block.assert_any_call(5, b"cal:")
+    nfc.pn532.ntag2xx_write_block.assert_any_call(6, b"trac")
+    nfc.pn532.ntag2xx_write_block.assert_any_call(7, b"k:1.")
+    nfc.pn532.ntag2xx_write_block.assert_any_call(8, b'mp3"')
+    nfc.pn532.ntag2xx_write_block.assert_any_call(9, b"]\x00\x00\x00")

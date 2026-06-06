@@ -1,4 +1,3 @@
-import json
 import logging
 from dataclasses import asdict
 
@@ -165,11 +164,7 @@ class JugoboxSaveOnJugoHandler(tornado.web.RequestHandler):
                 self.write({"status": "error", "message": msg})
                 return
 
-            # Convert uris to bytes
-            # We use JSON to store the list of URIs
-            uris_bytes = json.dumps(uris).encode("utf-8")
-
-            if nfc.write_ntag215_content(uris_bytes):
+            if nfc.write_ntag215_content(uris):
                 uid = nfc.read_uid()
                 if uid:
                     self.music.clear_state(uid)

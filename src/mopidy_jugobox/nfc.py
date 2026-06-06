@@ -1,8 +1,10 @@
+import json
 import logging
 
 import board
 import busio
 from adafruit_pn532.i2c import PN532_I2C
+from mopidy.types import Uri
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,14 +34,14 @@ class NFC:
 
         return "".join([hex(i) for i in uid]) if uid else None
 
-    def read_ntag215_content(self) -> bytearray | None:
+    def read_ntag215_content(self) -> list[Uri]:
         """Read the content of an NTAG215 tag.
 
         Returns:
-            The content of the NFC tag, or None if no tag found.
+            The list of URIs on the NFC tag.
         """
         if not self.pn532:
-            return None
+            return []
 
         try:
             full_content = bytearray()
@@ -53,20 +55,34 @@ class NFC:
                 full_content.extend(block)
                 if b"\x00" in block:
                     break
-            return full_content.rstrip(b"\x00")
+
+            content_str = full_content.rstrip(b"\x00").decode("utf-8")
+            if not content_str:
+                return []
+
+            try:
+                data = json.loads(content_str)
+                if isinstance(data, list):
+                    return [Uri(u) for u in data]
+                return [Uri(str(data))]
+            except json.JSONDecodeError:
+                # Not JSON, maybe it's just a single URI string
+                return [Uri(content_str)]
+
         except Exception:
             self._logger.exception("Error reading tag content")
-            return None
+            return []
 
-    def write_ntag215_content(self, data: bytes | bytearray) -> bool:
-        """Write the content to an NTAG215 tag.
+    def write_ntag215_content(self, uris: list[Uri]) -> bool:
+        """Write the URIs to an NTAG215 tag.
 
         Args:
-            data: Up to 504 bytes of data to write.
+            uris: List of Mopidy URIs to write.
 
         Returns:
             True if write was successful, False otherwise.
         """
+        data = json.dumps(uris).encode("utf-8")
         max_data_length = 504
         if len(data) > max_data_length:
             self._logger.error("Data length exceeds 504 bytes")
