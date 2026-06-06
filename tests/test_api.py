@@ -506,9 +506,7 @@ class TestJugoboxApi(AsyncHTTPTestCase):
             "status": "ok",
             "message": "Saved URIs to NFC tag",
         }
-        mock_nfc_instance.write_ntag215_content.assert_called_once_with(
-            json.dumps(body["uris"]).encode("utf-8")
-        )
+        mock_nfc_instance.write_ntag215_content.assert_called_once_with(body["uris"])
 
     @gen_test
     async def test_save_on_jugo_handler_post_nfc_setup_fails(self) -> None:

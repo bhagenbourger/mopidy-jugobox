@@ -1,10 +1,10 @@
-import json
 import logging
 import time
 from typing import override
 
 import pykka
 from mopidy import core
+from mopidy.types import Uri
 
 from .music import Music
 from .nfc import NFC
@@ -44,13 +44,11 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                 if uid != current_uid:
                     current_uid = uid
                     LOGGER.info(f"Card scanned with UID: {uid}")
-                    content = (
-                        self.nfc.read_ntag215_content()
-                        if self.nfc is not None
-                        else None
+                    uris = (
+                        self.nfc.read_ntag215_content() if self.nfc is not None else []
                     )
-                    if content and any(b != 0 for b in content):
-                        self.play_music(uid, content)
+                    if uris:
+                        self.play_music(uid, uris)
                     else:
                         self.play_music(uid)
             else:
@@ -62,24 +60,10 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                 current_uid = None
             time.sleep(1)
 
-    def play_music(self, uid: str, content: bytes | bytearray | None = None) -> None:
-        if content:
-            try:
-                # Strip nulls and decode
-                content_str = content.decode("utf-8").strip("\x00")
-                if content_str:
-                    try:
-                        data = json.loads(content_str)
-                        if isinstance(data, list):
-                            self.music.play_uris(data, music_id=uid)
-                        else:
-                            self.music.play_uris([str(data)], music_id=uid)
-                    except json.JSONDecodeError:
-                        # Not JSON, maybe it's just a single URI string
-                        self.music.play_uris([content_str], music_id=uid)
-                    return
-            except UnicodeDecodeError:
-                LOGGER.warning("Failed to decode tag content as UTF-8")
+    def play_music(self, uid: str, uris: list[Uri] | None = None) -> None:
+        if uris:
+            self.music.play_uris(uris, music_id=uid)
+            return
 
         self.music.play_music_id(uid)
 
