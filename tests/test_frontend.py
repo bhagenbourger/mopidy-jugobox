@@ -98,3 +98,53 @@ def test_play_music_empty_uris(
         frontend.play_music(uid, [])
         music_mock.play_music_id.assert_called_once_with(uid)
         music_mock.play_uris.assert_not_called()
+
+
+def test_start_scanning_no_card_does_not_pause(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock, nfc_mock: mock.Mock
+) -> None:
+    with (
+        mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock),
+        mock.patch("time.sleep", side_effect=[None, None, Exception("stop_loop")]),
+    ):
+        frontend = frontend_lib.JugoboxFrontend(config, core_mock)
+        frontend.nfc = nfc_mock
+        nfc_mock.read_uid.return_value = None
+
+        with pytest.raises(Exception, match="stop_loop"):
+            frontend.start_scanning()
+
+        music_mock.pause.assert_not_called()
+
+
+def test_start_scanning_card_scan_and_removal(
+    config: dict, core_mock: mock.Mock, music_mock: mock.Mock, nfc_mock: mock.Mock
+) -> None:
+    """
+    Sequence of UIDs:
+    "uid_1" (scanned),
+    "uid_1" (held),
+    None (removed),
+    None (still absent)
+    """
+    uid_sequence = ["uid_1", "uid_1", None, None]
+
+    with (
+        mock.patch("mopidy_jugobox.frontend.Music", return_value=music_mock),
+        mock.patch(
+            "time.sleep",
+            side_effect=[None, None, None, Exception("stop_loop")],
+        ),
+    ):
+        frontend = frontend_lib.JugoboxFrontend(config, core_mock)
+        frontend.nfc = nfc_mock
+        nfc_mock.read_uid.side_effect = uid_sequence
+        nfc_mock.read_ntag215_content.return_value = []
+
+        with pytest.raises(Exception, match="stop_loop"):
+            frontend.start_scanning()
+
+        # Should play music once for "uid_1"
+        music_mock.play_music_id.assert_called_once_with("uid_1")
+        # Should pause music once for "uid_1" on removal
+        music_mock.pause.assert_called_once_with("uid_1")
