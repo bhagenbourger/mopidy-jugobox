@@ -51,13 +51,12 @@ class JugoboxFrontend(pykka.ThreadingActor, core.CoreListener):
                         self.play_music(uid, uris)
                     else:
                         self.play_music(uid)
-            else:
-                if current_uid is not None:
-                    LOGGER.info(f"Card removed. UID: {current_uid}")
-                else:
-                    LOGGER.info("No card detected.")
+            elif current_uid is not None:
+                LOGGER.info(f"Card removed. UID: {current_uid}")
                 self.music.pause(current_uid)
                 current_uid = None
+            else:
+                LOGGER.debug("No card detected.")
             time.sleep(1)
 
     def play_music(self, uid: str, uris: list[Uri] | None = None) -> None:
