@@ -1,6 +1,6 @@
 [project]
 name = "mopidy-jugobox"
-description = "Mopidy extension for Juke Lego Box"
+description = "Mopidy extension for the Jugobox"
 readme = "README.md"
 requires-python = ">= 3.13"
 license = { text = "Apache-2.0" }
@@ -78,12 +78,13 @@ target-version = "py313"
 select = ["ALL"]
 ignore = [
     # Add rules you want to ignore here
-    "D",     # pydocstyle
-    "D203",  # one-blank-line-before-class
-    "D213",  # multi-line-summary-second-line
-    "G004",  # logging-f-string
-    "TD002", # missing-todo-author
-    "TD003", # missing-todo-link
+    "CPY001", # Ignore copyright notice checks globally
+    "D",      # pydocstyle
+    "D203",   # one-blank-line-before-class
+    "D213",   # multi-line-summary-second-line
+    "G004",   # logging-f-string
+    "TD002",  # missing-todo-author
+    "TD003",  # missing-todo-link
     #
     # Conflicting with `ruff format`
     "COM812", # missing-trailing-comma

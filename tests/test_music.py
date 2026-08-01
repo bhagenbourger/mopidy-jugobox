@@ -267,3 +267,43 @@ def test_resume_with_invalid_index(
     music.play_uris(uris, music_id="test_uid")
 
     core_mock.playback.play.assert_called_with()
+
+
+def test_pause_clears_state_when_playback_stopped(
+    core_mock: mock.Mock,
+    temp_config_file: Path,
+    state_instance: State,
+    logger_mock: mock.Mock,
+) -> None:
+    music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
+    uid = "test_uid"
+    state_instance.save(uid, 0, 1000)
+    core_mock.playback.get_current_tl_track.return_value = None
+
+    music.pause(uid)
+
+    assert state_instance.get(uid) is None
+
+
+def test_pause_clears_state_when_song_finished(
+    core_mock: mock.Mock,
+    temp_config_file: Path,
+    state_instance: State,
+    logger_mock: mock.Mock,
+) -> None:
+    music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
+    uid = "test_uid"
+    state_instance.save(uid, 0, 1000)
+
+    track_mock = mock.Mock()
+    track_mock.length = 180000
+    tl_track = mock.Mock()
+    tl_track.track = track_mock
+
+    core_mock.playback.get_current_tl_track.return_value = tl_track
+    core_mock.tracklist.index.return_value = 0
+    core_mock.playback.get_time_position.return_value = 179500
+
+    music.pause(uid)
+
+    assert state_instance.get(uid) is None
