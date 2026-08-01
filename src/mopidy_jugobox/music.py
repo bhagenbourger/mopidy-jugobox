@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from mopidy.models import TlTrack
 
 LOGGER = logging.getLogger(__name__)
+END_OF_THE_SONG_THRESHOLD_MS = 5000  # 5 second threshold to consider a song as "ended"
 
 
 class MusicConfigError(Exception):
@@ -61,12 +62,23 @@ class Music:
 
         tl_track = self._core.playback.get_current_tl_track()
         if tl_track is None:
+            self.clear_state(music_id)
             return
 
         index = self._core.tracklist.index(tl_track=tl_track)
         time_position = self._core.playback.get_time_position()
 
         if index is not None and time_position is not None:
+            track_length = (
+                tl_track.track.length if tl_track and tl_track.track else None
+            )
+            if (
+                track_length is not None
+                and time_position >= track_length - END_OF_THE_SONG_THRESHOLD_MS
+            ):
+                self.clear_state(music_id)
+                return
+
             self._state.save(
                 music_id=music_id,
                 index=index,

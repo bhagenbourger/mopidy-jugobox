@@ -4,7 +4,7 @@
 [![CI build status](https://img.shields.io/github/actions/workflow/status/bhagenbourger/mopidy-jugobox/ci.yml)](https://github.com/bhagenbourger/mopidy-jugobox/actions/workflows/ci.yml)
 [![Test coverage](https://img.shields.io/codecov/c/gh/bhagenbourger/mopidy-jugobox)](https://codecov.io/gh/bhagenbourger/mopidy-jugobox)
 
-Mopidy extension for Juke Lego Box
+Mopidy extension for the Jugobox
 
 <div style="text-align:center">
   <img src="images/jugobox_logo.png" alt="Logo">
