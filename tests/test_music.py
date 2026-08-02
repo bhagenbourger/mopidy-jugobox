@@ -3,6 +3,7 @@ import logging
 import tempfile
 from pathlib import Path
 
+import pykka
 import pytest
 from mopidy.core import Core
 from mopidy.models import TlTrack, Track
@@ -12,7 +13,7 @@ from pytest_mock import MockerFixture
 from mopidy_jugobox.music import Music, MusicConfigError
 from mopidy_jugobox.state import State
 
-exepected_time_position = 10000
+expected_time_position = 10000
 
 
 @pytest.fixture
@@ -176,10 +177,16 @@ def test_save_and_resume_state(
     tl_track = TlTrack(TracklistId(1), Track(uri=Uri("uri2")))
     tl_tracks: list[TlTrack] = [mocker.Mock(), tl_track, mocker.Mock()]
     uris: list[str] = ["uri1", "uri2", "uri3"]
-    core_mock.playback.get_current_tl_track.return_value = tl_track
-    core_mock.tracklist.index.return_value = 1
+    tl_track_future = pykka.ThreadingFuture()
+    tl_track_future.set(tl_track)
+    index_future = pykka.ThreadingFuture()
+    index_future.set(1)
+    time_position_future = pykka.ThreadingFuture()
+    time_position_future.set(expected_time_position)
+    core_mock.playback.get_current_tl_track.return_value = tl_track_future
+    core_mock.tracklist.index.return_value = index_future
     core_mock.tracklist.add.return_value = tl_tracks
-    core_mock.playback.get_time_position.return_value = exepected_time_position
+    core_mock.playback.get_time_position.return_value = time_position_future
 
     music.pause("test_uid")
 
@@ -187,12 +194,12 @@ def test_save_and_resume_state(
     state = state_instance.get("test_uid")
     assert state is not None
     assert state.index == 1
-    assert state.time_position == exepected_time_position
+    assert state.time_position == expected_time_position
 
     music.play_uris(uris, music_id="test_uid")
 
     core_mock.playback.play.assert_called_with(tlid=tl_tracks[1].tlid)
-    core_mock.playback.seek.assert_called_with(time_position=exepected_time_position)
+    core_mock.playback.seek.assert_called_with(time_position=expected_time_position)
 
 
 def test_clear_state(
@@ -207,10 +214,16 @@ def test_clear_state(
     tl_track = TlTrack(TracklistId(1), Track(uri=Uri("uri2")))
     tl_tracks: list[TlTrack] = [mocker.Mock(), tl_track, mocker.Mock()]
     uris: list[str] = ["uri1", "uri2", "uri3"]
-    core_mock.playback.get_current_tl_track.return_value = tl_track
-    core_mock.tracklist.index.return_value = 1
+    tl_track_future = pykka.ThreadingFuture()
+    tl_track_future.set(tl_track)
+    index_future = pykka.ThreadingFuture()
+    index_future.set(1)
+    time_position_future = pykka.ThreadingFuture()
+    time_position_future.set(expected_time_position)
+    core_mock.playback.get_current_tl_track.return_value = tl_track_future
+    core_mock.tracklist.index.return_value = index_future
     core_mock.tracklist.add.return_value = tl_tracks
-    core_mock.playback.get_time_position.return_value = exepected_time_position
+    core_mock.playback.get_time_position.return_value = time_position_future
 
     music.pause(uid)
     music.clear_state(uid)
@@ -247,12 +260,12 @@ def test_get_states(
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid = "test_uid"
-    state_instance.save(uid, 1, exepected_time_position)
+    state_instance.save(uid, 1, expected_time_position)
 
     states = music.get_states()
     assert uid in states
     assert states[uid].index == 1
-    assert states[uid].time_position == exepected_time_position
+    assert states[uid].time_position == expected_time_position
 
 
 def test_resume_with_invalid_index(
@@ -281,7 +294,9 @@ def test_pause_clears_state_when_playback_stopped(
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid = "test_uid"
     state_instance.save(uid, 0, 1000)
-    core_mock.playback.get_current_tl_track.return_value = None
+    tl_track_future = pykka.ThreadingFuture()
+    tl_track_future.set(None)
+    core_mock.playback.get_current_tl_track.return_value = tl_track_future
 
     music.pause(uid)
 
@@ -303,10 +318,15 @@ def test_pause_clears_state_when_song_finished(
     track_mock.length = 180000
     tl_track = mocker.Mock()
     tl_track.track = track_mock
-
-    core_mock.playback.get_current_tl_track.return_value = tl_track
-    core_mock.tracklist.index.return_value = 0
-    core_mock.playback.get_time_position.return_value = 179500
+    tl_track_future = pykka.ThreadingFuture()
+    tl_track_future.set(tl_track)
+    index_future = pykka.ThreadingFuture()
+    index_future.set(0)
+    time_position_future = pykka.ThreadingFuture()
+    time_position_future.set(179500)
+    core_mock.playback.get_current_tl_track.return_value = tl_track_future
+    core_mock.tracklist.index.return_value = index_future
+    core_mock.playback.get_time_position.return_value = time_position_future
 
     music.pause(uid)
 

@@ -2,7 +2,7 @@ import json
 import logging
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import quote
 
 from mopidy.core import Core
@@ -13,6 +13,7 @@ from .state import State
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    import pykka
     from mopidy.models import TlTrack
 
 LOGGER = logging.getLogger(__name__)
@@ -60,13 +61,25 @@ class Music:
         if self._core.playback is None or self._core.tracklist is None:
             return
 
-        tl_track = self._core.playback.get_current_tl_track()
+        tl_track_future: pykka.ThreadingFuture[TlTrack | None] = cast(
+            "pykka.ThreadingFuture[TlTrack | None]",
+            self._core.playback.get_current_tl_track(),
+        )
+        tl_track = tl_track_future.get(timeout=1)
         if tl_track is None:
             self.clear_state(music_id)
             return
 
-        index = self._core.tracklist.index(tl_track=tl_track)
-        time_position = self._core.playback.get_time_position()
+        index_future: pykka.ThreadingFuture[TlTrack | None] = cast(
+            "pykka.ThreadingFuture[TlTrack | None]",
+            self._core.tracklist.index(tl_track=tl_track),
+        )
+        index = index_future.get(timeout=1)
+        time_position_future: pykka.ThreadingFuture[TlTrack | None] = cast(
+            "pykka.ThreadingFuture[TlTrack | None]",
+            self._core.playback.get_time_position(),
+        )
+        time_position = time_position_future.get(timeout=1)
 
         if index is not None and time_position is not None:
             track_length = (
