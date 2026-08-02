@@ -2,12 +2,12 @@ import json
 import logging
 import tempfile
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from mopidy.core import Core
 from mopidy.models import TlTrack, Track
 from mopidy.types import TracklistId, Uri
+from pytest_mock import MockerFixture
 
 from mopidy_jugobox.music import Music, MusicConfigError
 from mopidy_jugobox.state import State
@@ -16,16 +16,16 @@ exepected_time_position = 10000
 
 
 @pytest.fixture
-def core_mock() -> mock.Mock:
-    mock_core = mock.Mock(spec=Core)
-    mock_core.tracklist = mock.Mock()
-    mock_core.playback = mock.Mock()
+def core_mock(mocker: MockerFixture) -> MockerFixture:
+    mock_core = mocker.Mock(spec=Core)
+    mock_core.tracklist = mocker.Mock()
+    mock_core.playback = mocker.Mock()
     return mock_core
 
 
 @pytest.fixture
-def logger_mock() -> mock.Mock:
-    return mock.Mock(spec=logging.Logger)
+def logger_mock(mocker: MockerFixture) -> MockerFixture:
+    return mocker.Mock(spec=logging.Logger)
 
 
 @pytest.fixture
@@ -54,9 +54,9 @@ def state_instance(temp_state_file: Path) -> State:
 
 
 def test_play_music_id_config_not_found(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, "non_existent.json", state_instance, logger_mock)
     with pytest.raises(MusicConfigError, match="Config file not found"):
@@ -64,7 +64,7 @@ def test_play_music_id_config_not_found(
 
 
 def test_play_music_id_config_empty(
-    core_mock: mock.Mock, state_instance: State, logger_mock: mock.Mock
+    core_mock: MockerFixture, state_instance: State, logger_mock: MockerFixture
 ) -> None:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         f.write("{}")
@@ -78,10 +78,10 @@ def test_play_music_id_config_empty(
 
 
 def test_play_music_id_id_not_found(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     with pytest.raises(MusicConfigError, match="not found in"):
@@ -89,10 +89,10 @@ def test_play_music_id_id_not_found(
 
 
 def test_play_music_id_success(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     music.play_music_id("test_id")
@@ -107,10 +107,10 @@ def test_play_music_id_success(
 
 
 def test_play_uris(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     number_of_uris_expected = 2
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
@@ -127,10 +127,10 @@ def test_play_uris(
 
 
 def test_pause(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     music.pause(None)
@@ -138,7 +138,7 @@ def test_pause(
 
 
 def test_save_new_file(
-    core_mock: mock.Mock, state_instance: State, logger_mock: mock.Mock
+    core_mock: MockerFixture, state_instance: State, logger_mock: MockerFixture
 ) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "new_config.json"
@@ -152,10 +152,10 @@ def test_save_new_file(
 
 
 def test_save_existing_file(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     music.save("test_id", ["new_uri"])
@@ -166,14 +166,15 @@ def test_save_existing_file(
 
 
 def test_save_and_resume_state(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     tl_track = TlTrack(TracklistId(1), Track(uri=Uri("uri2")))
-    tl_tracks: list[TlTrack] = [mock.Mock(), tl_track, mock.Mock()]
+    tl_tracks: list[TlTrack] = [mocker.Mock(), tl_track, mocker.Mock()]
     uris: list[str] = ["uri1", "uri2", "uri3"]
     core_mock.playback.get_current_tl_track.return_value = tl_track
     core_mock.tracklist.index.return_value = 1
@@ -195,15 +196,16 @@ def test_save_and_resume_state(
 
 
 def test_clear_state(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid: str = "test_uid"
     tl_track = TlTrack(TracklistId(1), Track(uri=Uri("uri2")))
-    tl_tracks: list[TlTrack] = [mock.Mock(), tl_track, mock.Mock()]
+    tl_tracks: list[TlTrack] = [mocker.Mock(), tl_track, mocker.Mock()]
     uris: list[str] = ["uri1", "uri2", "uri3"]
     core_mock.playback.get_current_tl_track.return_value = tl_track
     core_mock.tracklist.index.return_value = 1
@@ -219,10 +221,10 @@ def test_clear_state(
 
 
 def test_clear_full_state(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid1 = "test_uid1"
@@ -238,10 +240,10 @@ def test_clear_full_state(
 
 
 def test_get_states(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid = "test_uid"
@@ -254,14 +256,15 @@ def test_get_states(
 
 
 def test_resume_with_invalid_index(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
+    mocker: MockerFixture,
 ) -> None:
     music = Music(core_mock, "dummy_path", state_instance, logger_mock)
 
     uris = ["uri1"]
-    new_tl_tracks = [mock.Mock()]
+    new_tl_tracks = [mocker.Mock()]
     core_mock.tracklist.add.return_value = new_tl_tracks
 
     music.play_uris(uris, music_id="test_uid")
@@ -270,10 +273,10 @@ def test_resume_with_invalid_index(
 
 
 def test_pause_clears_state_when_playback_stopped(
-    core_mock: mock.Mock,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid = "test_uid"
@@ -286,18 +289,19 @@ def test_pause_clears_state_when_playback_stopped(
 
 
 def test_pause_clears_state_when_song_finished(
-    core_mock: mock.Mock,
+    mocker: MockerFixture,
+    core_mock: MockerFixture,
     temp_config_file: Path,
     state_instance: State,
-    logger_mock: mock.Mock,
+    logger_mock: MockerFixture,
 ) -> None:
     music = Music(core_mock, str(temp_config_file), state_instance, logger_mock)
     uid = "test_uid"
     state_instance.save(uid, 0, 1000)
 
-    track_mock = mock.Mock()
+    track_mock = mocker.Mock()
     track_mock.length = 180000
-    tl_track = mock.Mock()
+    tl_track = mocker.Mock()
     tl_track.track = track_mock
 
     core_mock.playback.get_current_tl_track.return_value = tl_track
