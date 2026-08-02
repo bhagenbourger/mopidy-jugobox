@@ -1,48 +1,55 @@
 import json
 import logging
-from unittest import mock
+from unittest.mock import Mock
 
 import pytest
 from mopidy.types import Uri
+from pytest_mock import MockerFixture
 
 from mopidy_jugobox.nfc import NFC
 
 
 @pytest.fixture
-def logger_mock() -> mock.Mock:
-    return mock.Mock(spec=logging.Logger)
+def logger_mock(mocker: MockerFixture) -> Mock:
+    """Mock a logger used by NFC."""
+    return mocker.Mock(spec=logging.Logger)
 
 
 @pytest.fixture
-def nfc(logger_mock: mock.Mock) -> NFC:
+def mock_board(mocker: MockerFixture) -> Mock:
+    """Patch the board module used by NFC and return the mock with SCL/SDA attrs."""
+    board = mocker.Mock()
+    board.SCL = "SCL"
+    board.SDA = "SDA"
+    mocker.patch("mopidy_jugobox.nfc.board", board)
+    return board
+
+
+@pytest.fixture
+def mock_busio_i2c(mocker: MockerFixture) -> Mock:
+    """Patch the busio.I2C class used by NFC and return the mock class."""
+    i2c_mock = mocker.Mock()
+    mocker.patch("mopidy_jugobox.nfc.busio.I2C", i2c_mock)
+    return i2c_mock
+
+
+@pytest.fixture
+def mock_pn532_i2c(mocker: MockerFixture) -> Mock:
+    """Patch the PN532_I2C class used by NFC and return the mock class."""
+    pn532_mock = mocker.Mock()
+    mocker.patch("mopidy_jugobox.nfc.PN532_I2C", pn532_mock)
+    return pn532_mock
+
+
+@pytest.fixture
+def nfc(logger_mock: Mock) -> NFC:
     return NFC(logger_mock)
 
 
-@pytest.fixture
-def mock_board(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    m = mock.Mock()
-    monkeypatch.setattr("mopidy_jugobox.nfc.board", m)
-    return m
-
-
-@pytest.fixture
-def mock_busio_i2c(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    m = mock.Mock()
-    monkeypatch.setattr("mopidy_jugobox.nfc.busio.I2C", m)
-    return m
-
-
-@pytest.fixture
-def mock_pn532_i2c(monkeypatch: pytest.MonkeyPatch) -> mock.Mock:
-    m = mock.Mock()
-    monkeypatch.setattr("mopidy_jugobox.nfc.PN532_I2C", m)
-    return m
-
-
 def test_setup_success(
-    mock_pn532_i2c: mock.Mock,
-    mock_board: mock.Mock,
-    mock_busio_i2c: mock.Mock,
+    mock_pn532_i2c: pytest.FixtureRequest,
+    mock_board: pytest.FixtureRequest,
+    mock_busio_i2c: pytest.FixtureRequest,
     nfc: NFC,
 ) -> None:
     mock_pn532_instance = mock_pn532_i2c.return_value
@@ -57,9 +64,9 @@ def test_setup_success(
 
 
 def test_setup_failure(
-    mock_pn532_i2c: mock.Mock,
+    mock_pn532_i2c: pytest.FixtureRequest,
     nfc: NFC,
-    logger_mock: mock.Mock,
+    logger_mock: pytest.FixtureRequest,
 ) -> None:
     mock_pn532_i2c.side_effect = Exception("Setup failed")
 
@@ -71,16 +78,16 @@ def test_read_uid_no_pn532(nfc: NFC) -> None:
     assert nfc.read_uid() is None
 
 
-def test_read_uid_success(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
+def test_read_uid_success(nfc: NFC, mocker: MockerFixture) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.read_passive_target.return_value = b"\x01\x02\x03\x04"
 
     assert nfc.read_uid() == "0x10x20x30x4"
     nfc.pn532.read_passive_target.assert_called_once_with(timeout=0.5)
 
 
-def test_read_uid_none(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
+def test_read_uid_none(nfc: NFC, mocker: MockerFixture) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.read_passive_target.return_value = None
 
     assert nfc.read_uid() is None
@@ -90,9 +97,9 @@ def test_read_ntag215_content_no_pn532(nfc: NFC) -> None:
     assert nfc.read_ntag215_content() == []
 
 
-def test_read_ntag215_content_success(nfc: NFC) -> None:
+def test_read_ntag215_content_success(nfc: NFC, mocker: MockerFixture) -> None:
     block_size: int = 4
-    nfc.pn532 = mock.Mock()
+    nfc.pn532 = mocker.Mock()
     # Mocking multiple blocks, second one has null terminator
     # JSON list of URIs
     uris = ["local:track:1.mp3", "local:track:2.mp3"]
@@ -109,8 +116,10 @@ def test_read_ntag215_content_success(nfc: NFC) -> None:
     assert nfc.pn532.ntag2xx_read_block.call_count == len(blocks)
 
 
-def test_read_ntag215_content_fallback_single_uri(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
+def test_read_ntag215_content_fallback_single_uri(
+    nfc: NFC, mocker: MockerFixture
+) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.ntag2xx_read_block.side_effect = [
         b"loca",
         b"l:tr",
@@ -122,8 +131,10 @@ def test_read_ntag215_content_fallback_single_uri(nfc: NFC) -> None:
     assert nfc.read_ntag215_content() == [Uri("local:track:1.mp3")]
 
 
-def test_read_ntag215_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
-    nfc.pn532 = mock.Mock()
+def test_read_ntag215_content_failure(
+    nfc: NFC, logger_mock: pytest.FixtureRequest, mocker: MockerFixture
+) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.ntag2xx_read_block.side_effect = Exception("Read failed")
 
     assert nfc.read_ntag215_content() == []
@@ -134,8 +145,8 @@ def test_write_ntag215_content_no_pn532(nfc: NFC) -> None:
     assert nfc.write_ntag215_content([Uri("local:track:1.mp3")]) is False
 
 
-def test_write_ntag215_content_success(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
+def test_write_ntag215_content_success(nfc: NFC, mocker: MockerFixture) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.ntag2xx_write_block.return_value = True
     uris = [Uri("local:track:1.mp3")]
     expected_data = json.dumps(uris).encode("utf-8")
@@ -152,22 +163,28 @@ def test_write_ntag215_content_success(nfc: NFC) -> None:
         )
 
 
-def test_write_ntag215_content_failure(nfc: NFC, logger_mock: mock.Mock) -> None:
-    nfc.pn532 = mock.Mock()
+def test_write_ntag215_content_failure(
+    nfc: NFC, logger_mock: pytest.FixtureRequest, mocker: MockerFixture
+) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.ntag2xx_write_block.side_effect = Exception("Write failed")
 
     assert nfc.write_ntag215_content([Uri("local:track:1.mp3")]) is False
     logger_mock.exception.assert_called_once_with("Error writing tag content")
 
 
-def test_write_ntag215_content_too_long(nfc: NFC, logger_mock: mock.Mock) -> None:
+def test_write_ntag215_content_too_long(
+    nfc: NFC, logger_mock: pytest.FixtureRequest
+) -> None:
     uris = [Uri("local:track:" + "a" * 500)]
     assert nfc.write_ntag215_content(uris) is False
     logger_mock.error.assert_called_once_with("Data length exceeds 504 bytes")
 
 
-def test_write_ntag215_content_with_padding_success(nfc: NFC) -> None:
-    nfc.pn532 = mock.Mock()
+def test_write_ntag215_content_with_padding_success(
+    nfc: NFC, mocker: MockerFixture
+) -> None:
+    nfc.pn532 = mocker.Mock()
     nfc.pn532.ntag2xx_write_block.return_value = True
     data = [Uri("local:track:1.mp3")]
     expected_count = 6

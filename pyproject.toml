@@ -39,7 +39,7 @@ dev = [
     { include-group = "typing" },
 ]
 ruff = ["ruff"]
-tests = ["pytest", "pytest-cov", "pygobject"]
+tests = ["pytest", "pytest-cov", "pytest-mock", "pygobject"]
 typing = ["pyright"]
 
 
